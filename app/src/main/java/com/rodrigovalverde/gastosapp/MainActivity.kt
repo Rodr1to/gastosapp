@@ -1,19 +1,23 @@
 package com.rodrigovalverde.gastosapp
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -23,15 +27,14 @@ import com.rodrigovalverde.gastosapp.data.Gasto
 import com.rodrigovalverde.gastosapp.viewmodel.GastosViewModel
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    GastosScreen()
-                }
+                GastosScreen()
             }
         }
     }
@@ -40,89 +43,117 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GastosScreen(viewModel: GastosViewModel = viewModel()) {
-    val lista by viewModel.listaGastos.collectAsState()
-    val total by viewModel.totalGastos.collectAsState()
+    val context = LocalContext.current
+
+    // Observamos datos del ViewModel
+    val lista by viewModel.listaMovimientos.collectAsState()
+    val totalIngresos by viewModel.totalIngresos.collectAsState()
+    val totalGastos by viewModel.totalGastos.collectAsState() // Será negativo
+    val saldoFinal by viewModel.saldoFinal.collectAsState()
 
     var descripcion by remember { mutableStateOf("") }
     var monto by remember { mutableStateOf("") }
+    var esIngreso by remember { mutableStateOf(false) } // Switch: false=Gasto, true=Ingreso
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Registro de Gastos") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                title = { Text("Finanzas Personales") },
+                actions = {
+                    // Botón para ir al Gráfico (Punto 4)
+                    IconButton(onClick = {
+                        val intent = Intent(context, GraficoActivity::class.java)
+                        // Enviamos los datos al gráfico (Tomamos los últimos 10 para que quepan)
+                        val datosGrafico = lista.take(10)
+                        intent.putStringArrayListExtra("descripciones", ArrayList(datosGrafico.map { it.descripcion }))
+                        intent.putExtra("montos", datosGrafico.map { it.monto }.toDoubleArray())
+                        context.startActivity(intent)
+                    }) {
+                        Icon(Icons.Default.BarChart, contentDescription = "Ver Gráfico")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             )
-        },
-        bottomBar = {
-            Surface(
-                color = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("TOTAL GASTADO:", fontWeight = FontWeight.Bold)
-                    Text("S/ %.2f".format(total), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-            }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .padding(16.dp)
-                .fillMaxSize()
-        ) {
+        Column(modifier = Modifier.padding(padding).padding(16.dp).fillMaxSize()) {
+
+            // 1. TARJETA DE RESUMEN (Ingresos, Gastos, Saldo)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    InfoCaja("Ingresos", totalIngresos, Color(0xFF2E7D32)) // Verde
+                    InfoCaja("Gastos", totalGastos, Color(0xFFC62828))     // Rojo
+                    InfoCaja("Saldo", saldoFinal, Color.Black)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2. FORMULARIO DE REGISTRO
             Card(elevation = CardDefaults.cardElevation(4.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Nuevo Gasto", fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    // Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (esIngreso) "Registrar INGRESO" else "Registrar GASTO",
+                            fontWeight = FontWeight.Bold,
+                            color = if (esIngreso) Color(0xFF2E7D32) else Color(0xFFC62828)
+                        )
+                        Switch(checked = esIngreso, onCheckedChange = { esIngreso = it })
+                    }
 
                     OutlinedTextField(
                         value = descripcion,
                         onValueChange = { descripcion = it },
-                        label = { Text("Descripción (Ej: Pasajes)") },
+                        label = { Text("Descripción") },
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = monto,
                         onValueChange = { monto = it },
-                        label = { Text("Monto (Ej: 5.00)") },
+                        label = { Text("Monto") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     Spacer(modifier = Modifier.height(16.dp))
+
                     Button(
                         onClick = {
-                            viewModel.agregarGasto(descripcion, monto)
+                            viewModel.registrarMovimiento(descripcion, monto, esIngreso)
                             descripcion = ""
                             monto = ""
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (esIngreso) Color(0xFF2E7D32) else Color(0xFFC62828)
+                        )
                     ) {
-                        Text("Registrar Gasto")
+                        Text(if (esIngreso) "Guardar Ingreso" else "Guardar Gasto")
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Historial", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+            Text("Últimos Movimientos:", style = MaterialTheme.typography.titleMedium)
 
+            // 3. LISTA DE MOVIMIENTOS
             LazyColumn {
-                items(lista) { gasto ->
-                    ItemGasto(
-                        gasto = gasto,
-                        onDeleteClick = {
-                            viewModel.eliminarGasto(gasto)
-                        }
-                    )
+                items(lista) { item ->
+                    ItemMovimiento(item, onDelete = { viewModel.eliminarMovimiento(item) })
                 }
             }
         }
@@ -130,42 +161,51 @@ fun GastosScreen(viewModel: GastosViewModel = viewModel()) {
 }
 
 @Composable
-fun ItemGasto(gasto: Gasto, onDeleteClick: () -> Unit) {
-    val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-    val fechaTexto = formatoFecha.format(gasto.fecha)
+fun InfoCaja(titulo: String, valor: Double, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(titulo, fontSize = 12.sp)
+        Text(
+            text = "S/ %.2f".format(abs(valor)), // Valor absoluto para mostrar
+            fontWeight = FontWeight.Bold,
+            color = color,
+            fontSize = 16.sp
+        )
+    }
+}
+
+@Composable
+fun ItemMovimiento(gasto: Gasto, onDelete: () -> Unit) {
+    // Lógica visual: Rojo si es negativo (Gasto), Negro si es positivo (Ingreso)
+    val esGasto = gasto.monto < 0
+    val colorTexto = if (esGasto) Color(0xFFC62828) else Color.Black
+    val signo = if (esGasto) "-" else "+"
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        modifier = Modifier.padding(vertical = 4.dp).fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(gasto.descripcion, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(fechaTexto, style = MaterialTheme.typography.bodySmall)
+            Column {
+                // Descripción en Rojo o Negro según sea Gasto o Ingreso
+                Text(gasto.descripcion, fontWeight = FontWeight.Bold, color = colorTexto)
+
+                val fechaFormat = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(gasto.fecha)
+                Text(fechaFormat, fontSize = 12.sp, color = Color.Gray)
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "S/ %.2f".format(gasto.monto),
+                    text = "$signo S/ %.2f".format(abs(gasto.monto)),
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(end = 8.dp)
+                    color = colorTexto
                 )
-
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Eliminar gasto",
-                        tint = Color.Gray,
-                    )
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Gray)
                 }
             }
         }

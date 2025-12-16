@@ -16,28 +16,40 @@ class GastosViewModel(application: Application) : AndroidViewModel(application) 
 
     private val dao = AppDatabase.getDatabase(application).gastoDao()
 
-    val listaGastos: StateFlow<List<Gasto>> = dao.obtenerGastos()
+    val listaMovimientos: StateFlow<List<Gasto>> = dao.obtenerGastos()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val saldoFinal: StateFlow<Double> = dao.obtenerSaldoTotal()
+        .map { it ?: 0.0 }
+        .stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
+
+    val totalIngresos: StateFlow<Double> = dao.obtenerTotalIngresos()
+        .map { it ?: 0.0 }
+        .stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
 
     val totalGastos: StateFlow<Double> = dao.obtenerTotalGastos()
         .map { it ?: 0.0 }
         .stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
 
-    fun agregarGasto(descripcion: String, montoString: String) {
+    // Función modificada para recibir si es ingreso o gasto
+    fun registrarMovimiento(descripcion: String, montoString: String, esIngreso: Boolean) {
         val monto = montoString.toDoubleOrNull()
-        if (descripcion.isNotBlank() && monto != null) {
+        if (descripcion.isNotBlank() && monto != null && monto > 0) {
             viewModelScope.launch {
-                val nuevoGasto = Gasto(
+                // Si es ingreso se guarda positivo, si es gasto negativo
+                val montoFinal = if (esIngreso) monto else -monto
+
+                val nuevoMovimiento = Gasto(
                     descripcion = descripcion,
-                    monto = monto,
+                    monto = montoFinal,
                     fecha = Date()
                 )
-                dao.insertar(nuevoGasto)
+                dao.insertar(nuevoMovimiento)
             }
         }
     }
 
-    fun eliminarGasto(gasto: Gasto) {
+    fun eliminarMovimiento(gasto: Gasto) {
         viewModelScope.launch {
             dao.eliminar(gasto)
         }
