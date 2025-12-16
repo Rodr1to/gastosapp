@@ -40,46 +40,45 @@ fun GraficoBarrasHorizontal(descripciones: ArrayList<String>, montos: DoubleArra
         val anchoTotal = size.width
         val altoTotal = size.height
 
-        val altoBarra = 60f // Un poco más delgadas para que se vean elegantes
+        val altoBarra = 60f
         val espacioEntreBarras = 50f
-        val margenIzquierdo = 350f // Aumentamos espacio para nombres largos a la izquierda
+
+        val margenIzquierdo = anchoTotal * 0.25f
+
+        val espacioParaMonto = anchoTotal * 0.20f
+
         val margenSuperior = 100f
 
         val maxValor = montos.maxOfOrNull { abs(it) }?.toFloat() ?: 1f
 
-        // --- CORRECCIÓN AQUÍ ---
-        // Antes restábamos 100f, era muy poco. Ahora restamos 400f.
-        // Esto asegura que la barra más larga termine mucho antes del borde derecho,
-        // dejando espacio suficiente para escribir
-        val anchoDisponible = anchoTotal - margenIzquierdo - 400f
+        // ancho disponible para la barra es: Total - Izquierda - EspacioDerecho
+        val anchoDisponible = anchoTotal - margenIzquierdo - espacioParaMonto
 
         val paintTextoEtiqueta = android.graphics.Paint().apply {
             color = android.graphics.Color.BLACK
-            textSize = 45f // Texto un poco más pequeño para que quepa mejor
+            textSize = 35f
             textAlign = android.graphics.Paint.Align.RIGHT
             isAntiAlias = true
         }
 
         val paintTextoMonto = android.graphics.Paint().apply {
             color = android.graphics.Color.BLACK
-            textSize = 45f
+            textSize = 35f
             textAlign = android.graphics.Paint.Align.LEFT
             isAntiAlias = true
-            typeface = android.graphics.Typeface.DEFAULT_BOLD // Negrita para el monto
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
 
         montos.forEachIndexed { index, monto ->
             val valorAbsoluto = abs(monto).toFloat()
 
-            // Calculamos el ancho proporcional
+            // ancho proporcional
             val anchoBarra = (valorAbsoluto / maxValor) * anchoDisponible
 
             val posicionY = margenSuperior + index * (altoBarra + espacioEntreBarras)
 
             val colorBarra = if (monto >= 0) Color(0xFF4CAF50) else Color(0xFFE53935)
 
-            // 1. DIBUJAR ETIQUETA (Izquierda)
-            // Cortamos el texto si es muy largo para que no se superponga
             val etiqueta = descripciones.getOrElse(index) { "" }
             val etiquetaCortada = if (etiqueta.length > 15) etiqueta.take(15) + "..." else etiqueta
 
@@ -90,8 +89,6 @@ fun GraficoBarrasHorizontal(descripciones: ArrayList<String>, montos: DoubleArra
                 paintTextoEtiqueta
             )
 
-            // 2. DIBUJAR BARRA
-            // Aseguramos que tenga al menos 5px de ancho para que se vea algo si el valor es muy bajo
             val anchoVisual = if (anchoBarra < 5f) 5f else anchoBarra
 
             drawRect(
@@ -100,8 +97,6 @@ fun GraficoBarrasHorizontal(descripciones: ArrayList<String>, montos: DoubleArra
                 size = Size(width = anchoVisual, height = altoBarra)
             )
 
-            // 3. DIBUJAR MONTO (Derecha)
-            // Ahora sí hay espacio porque 'anchoVisual' nunca llegará al borde de la pantalla
             drawContext.canvas.nativeCanvas.drawText(
                 "S/ ${String.format("%.2f", valorAbsoluto)}",
                 margenIzquierdo + anchoVisual + 20f,
