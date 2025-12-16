@@ -21,7 +21,6 @@ class GraficoActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Recibimos los datos enviados desde el MainActivity
         val descripciones = intent.getStringArrayListExtra("descripciones") ?: arrayListOf()
         val montos = intent.getDoubleArrayExtra("montos") ?: doubleArrayOf()
 
@@ -38,67 +37,74 @@ class GraficoActivity : ComponentActivity() {
 @Composable
 fun GraficoBarrasHorizontal(descripciones: ArrayList<String>, montos: DoubleArray) {
     Canvas(modifier = Modifier.fillMaxSize().padding(20.dp)) {
-        // Dimensiones del Canvas
         val anchoTotal = size.width
         val altoTotal = size.height
 
-        // Configuración de las barras
-        val altoBarra = 80f
-        val espacioEntreBarras = 40f
-        val margenIzquierdo = 300f // Espacio para las etiquetas (nombres)
+        val altoBarra = 60f // Un poco más delgadas para que se vean elegantes
+        val espacioEntreBarras = 50f
+        val margenIzquierdo = 350f // Aumentamos espacio para nombres largos a la izquierda
         val margenSuperior = 100f
 
-        // Buscamos el valor absoluto máximo para calcular la escala
-        // (Usamos abs() porque los gastos son negativos)
         val maxValor = montos.maxOfOrNull { abs(it) }?.toFloat() ?: 1f
 
-        // Ancho máximo disponible para dibujar
-        val anchoDisponible = anchoTotal - margenIzquierdo - 100f
+        // --- CORRECCIÓN AQUÍ ---
+        // Antes restábamos 100f, era muy poco. Ahora restamos 400f.
+        // Esto asegura que la barra más larga termine mucho antes del borde derecho,
+        // dejando espacio suficiente para escribir
+        val anchoDisponible = anchoTotal - margenIzquierdo - 400f
 
-        // Pinturas para texto (Android nativo)
         val paintTextoEtiqueta = android.graphics.Paint().apply {
             color = android.graphics.Color.BLACK
-            textSize = 40f
+            textSize = 45f // Texto un poco más pequeño para que quepa mejor
             textAlign = android.graphics.Paint.Align.RIGHT
+            isAntiAlias = true
         }
 
         val paintTextoMonto = android.graphics.Paint().apply {
             color = android.graphics.Color.BLACK
-            textSize = 40f
+            textSize = 45f
             textAlign = android.graphics.Paint.Align.LEFT
+            isAntiAlias = true
+            typeface = android.graphics.Typeface.DEFAULT_BOLD // Negrita para el monto
         }
 
-        // Dibujamos una barra por cada dato
         montos.forEachIndexed { index, monto ->
             val valorAbsoluto = abs(monto).toFloat()
 
-            // Calculamos el ancho de esta barra según la escala
+            // Calculamos el ancho proporcional
             val anchoBarra = (valorAbsoluto / maxValor) * anchoDisponible
 
             val posicionY = margenSuperior + index * (altoBarra + espacioEntreBarras)
 
-            // Color: Verde si es Ingreso (>=0), Rojo si es Gasto (<0)
             val colorBarra = if (monto >= 0) Color(0xFF4CAF50) else Color(0xFFE53935)
 
-            // 1. DIBUJAR ETIQUETA (A la izquierda)
+            // 1. DIBUJAR ETIQUETA (Izquierda)
+            // Cortamos el texto si es muy largo para que no se superponga
+            val etiqueta = descripciones.getOrElse(index) { "" }
+            val etiquetaCortada = if (etiqueta.length > 15) etiqueta.take(15) + "..." else etiqueta
+
             drawContext.canvas.nativeCanvas.drawText(
-                descripciones.getOrElse(index) { "" },
-                margenIzquierdo - 20f, // Un poco antes de la barra
-                posicionY + altoBarra / 1.5f, // Centrado verticalmente
+                etiquetaCortada,
+                margenIzquierdo - 20f,
+                posicionY + altoBarra / 1.5f,
                 paintTextoEtiqueta
             )
 
-            // 2. DIBUJAR BARRA (Rectángulo Horizontal)
+            // 2. DIBUJAR BARRA
+            // Aseguramos que tenga al menos 5px de ancho para que se vea algo si el valor es muy bajo
+            val anchoVisual = if (anchoBarra < 5f) 5f else anchoBarra
+
             drawRect(
                 color = colorBarra,
                 topLeft = Offset(x = margenIzquierdo, y = posicionY),
-                size = Size(width = anchoBarra, height = altoBarra)
+                size = Size(width = anchoVisual, height = altoBarra)
             )
 
-            // 3. DIBUJAR MONTO (A la derecha de la barra)
+            // 3. DIBUJAR MONTO (Derecha)
+            // Ahora sí hay espacio porque 'anchoVisual' nunca llegará al borde de la pantalla
             drawContext.canvas.nativeCanvas.drawText(
                 "S/ ${String.format("%.2f", valorAbsoluto)}",
-                margenIzquierdo + anchoBarra + 20f,
+                margenIzquierdo + anchoVisual + 20f,
                 posicionY + altoBarra / 1.5f,
                 paintTextoMonto
             )
